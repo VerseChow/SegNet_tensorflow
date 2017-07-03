@@ -1,4 +1,4 @@
-#Image Segmentation based on SegNet.
+# Image Segmentation based on SegNet.
 
 This repo is to reimplement image segmentation via tensorflow.
 
