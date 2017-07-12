@@ -68,10 +68,16 @@ def LabelToRGB (image):
 
 def PrepareData (voc_dir, set_):
     num_classes = color_map.shape[0] - 1
-    if not os.path.isdir('./data/' + set_ + '/labels'):
-        os.makedirs('./data/' + set_ + '/labels')
-    if not os.path.isdir('./data/' + set_ + '/images'):
-        os.makedirs('./data/' + set_ + '/images')
+    if not os.path.isdir('./Data/' + set_ + '/labels'):
+        os.makedirs('./Data/' + set_ + '/labels')
+    if not os.path.isdir('./Data/' + set_ + '/images'):
+        os.makedirs('./Data/' + set_ + '/images')
+        
+    from shutil import copyfile
+
+    copyfile(voc_dir + '/ImageSets/Segmentation/' + set_ + '.txt',
+            './Data/'+set_+'/'+set_+'.txt')    
+
     with open(voc_dir + '/ImageSets/Segmentation/' + set_ + '.txt') as f:
         content = f.readlines()
         for line in content:
@@ -79,7 +85,7 @@ def PrepareData (voc_dir, set_):
             print('%s/%s' % (set_, fn))
             img = imread(voc_dir + '/JPEGImages/' + fn + '.jpg', mode='RGB')
 
-            imsave('./data/' + set_ + '/images/' + fn + '.jpg', img)
+            imsave('./Data/' + set_ + '/images/' + fn + '.jpg', img)
 
             lbl = imread(voc_dir + '/SegmentationClass/' + fn + '.png', mode='RGB')
             tmp = np.zeros((lbl.shape[0], lbl.shape[1]), dtype=np.uint8) + 255
@@ -89,7 +95,8 @@ def PrepareData (voc_dir, set_):
                 e = lbl - clr[np.newaxis, np.newaxis, :]
                 tmp[np.sum(e**2, axis=2) == 0] = k
 
-            imsave('./data/' + set_ + '/labels/' + fn + '.png', tmp)
+            imsave('./Data/' + set_ + '/labels/' + fn + '.png', tmp)
+
             
 # Convert the VOC2012 dataset into the format we want
 if __name__ == '__main__':

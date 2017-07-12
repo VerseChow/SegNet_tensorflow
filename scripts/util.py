@@ -25,8 +25,8 @@ class bbox_property():
 
 class path_pack():
     def __init__(self, config):
-        self.data_dir = config.train_test_dataset
-        self.result_dir = './test_results'
+        self.data_dir = config.train_test_dataset+config.set
+        self.result_dir = './../test_results'
 
     def check_path(self):
         if not os.path.exists(self.result_dir):

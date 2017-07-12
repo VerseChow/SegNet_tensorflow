@@ -1,6 +1,6 @@
 from util import *
 from SegNetModel import *
-#default resolution is 640*480
+
 def main(config):
 
     os.environ['CUDA_VISIBLE_DEVICES'] = config.gpu
@@ -62,12 +62,12 @@ def parse_args():
     parser.add_argument('--threshold', dest='threshold', help='threshold to display',
                         default=0.9, type=float)
     parser.add_argument('--train_test_dataset', dest='train_test_dataset', help='train and test dataset directory',
-                        default='./data/train', type=str)
+                        default='./Data/', type=str)
     parser.add_argument('--resolution', dest='resolution', nargs='+', help='image resolution, [width height]',
                         default = [224, 224], type=int)
     parser.add_argument('--num_class', dest='num_class', help='Segmentation class number',
                         default = 21, type=int)
-    parser.add_argument('--set', dest='set', help='train or test set, ie, train, val or trainval',
+    parser.add_argument('--set_', dest='set', help='train or test set, ie, train, val or trainval',
                         default = 'train', type=str)
     config = parser.parse_args()
 
