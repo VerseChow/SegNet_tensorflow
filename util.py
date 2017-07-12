@@ -8,7 +8,6 @@ from glob import glob
 from numpy import *
 from lxml import etree
 from glob import glob
-from numpy import *
 from scipy import ndimage
 from scipy.ndimage.filters import median_filter
 from scipy.misc import imread, imsave, imresize, imshow
@@ -27,24 +26,11 @@ class bbox_property():
 class path_pack():
     def __init__(self, config):
         self.data_dir = config.train_test_dataset
-        self.result_dir = './results'
-        self.train_result_dir = './train_results'
-        self.resize_image_dir = './'+config.dataset+'/JPEGImages'
-        self.xml_path = './'+config.dataset+'/Annotations'
-        self.txt_path = './'+config.dataset+'/ImageSets/Main'
+        self.result_dir = './test_results'
 
     def check_path(self):
-
-        if not os.path.exists(self.train_result_dir):
-            os.makedirs(self.train_result_dir)
         if not os.path.exists(self.result_dir):
             os.makedirs(self.result_dir)
-        if not os.path.exists(self.resize_image_dir):
-            os.makedirs(self.resize_image_dir)
-        if not os.path.exists(self.xml_path):
-            os.makedirs(self.xml_path)
-        if not os.path.exists(self.txt_path):
-            os.makedirs(self.txt_path)
 
 
 def numericalSort(value):

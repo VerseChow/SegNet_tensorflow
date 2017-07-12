@@ -4,7 +4,7 @@ from numpy import *
 
 vgg_weights = load('vgg16.npy', encoding='latin1').item()
 
-def conv_relu_vgg(x, name='conv_vgg', reuse=None, training=True):
+def conv_relu_vgg(x, name='conv_vgg', reuse=None, training=False):
     kernel = vgg_weights[name][0]
     bias = vgg_weights[name][1]
     with tf.variable_scope(name):

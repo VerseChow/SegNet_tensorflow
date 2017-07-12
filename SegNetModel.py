@@ -17,16 +17,10 @@ class SegNetModel():
         self.init_learning_rate = config.init_learning_rate
         self.learning_rate_decay = config.learning_rate_decay
         self.num_epoch = config.num_epoch
-        self.saved_name = config.saved_name
-        self.label = config.label
-        self.num_class = 21
+        self.num_class = config.num_class
 
-    def input_pipeline(self, fn_seg, fn_img):
+    def input_pipeline(self, fn_img, fn_seg=None):
         reader = tf.WholeFileReader()      
-        #print fn_seg
-        #print fn_img
-        if not len(fn_seg) == len(fn_img):
-            raise ValueError('Number of images and segmentations do not match!')
 
         with tf.variable_scope('image'):
             fn_img_queue = tf.train.string_input_producer(fn_img, shuffle=False)
@@ -35,6 +29,13 @@ class SegNetModel():
             img = tf.image.resize_images(img, [self.img_height, self.img_width], method=tf.image.ResizeMethod.BILINEAR)
             img = tf.cast(img, dtype = tf.float32)
             img = tf.reshape(img, [self.img_height, self.img_width, 3])
+            if self.training is False:
+                img = tf.train.batch([img], self.batch_size)
+                return img
+
+        if not len(fn_seg) == len(fn_img):
+            raise ValueError('Number of images and segmentations do not match!')
+
         with tf.variable_scope('segmentation'):
             fn_seg_queue = tf.train.string_input_producer(fn_seg, shuffle=False)
             _, value = reader.read(fn_seg_queue)
@@ -76,7 +77,127 @@ class SegNetModel():
 
         self.saver = saver
 
-    def build_model(self, x, y):
+    def SegNet_training_setup(self, fn_img, fn_seg):
+
+        y, x, gt = self.input_pipeline(fn_img, fn_seg)
+        gt = tf.cast(gt, tf.uint8)
+        logits, loss = self.build_model(x, y)
+
+        y = tf.to_int64(y, name = 'y')
+        pred_train = 12*tf.cast(logits, tf.uint8)
+        gt = tf.reshape(gt, [-1, self.img_height, self.img_width, 1])
+        pred_train = tf.reshape(pred_train, [-1, self.img_height, self.img_width, 1])
+        result_train = tf.concat([gt, pred_train], axis=2)
+        result_train = tf.cast(tf.reshape(result_train, [-1, self.img_height, self.img_width*2, 1]), tf.uint8)
+
+        rgb_image = tf.cast(logits, tf.uint8)
+        rgb_image = tf.reshape(rgb_image, [-1, self.img_height, self.img_width, 1])
+
+        rgb_image = LabelToRGB (rgb_image)
+        x = tf.cast(x, tf.uint8)
+        rgb_image = tf.concat([x, rgb_image], axis=2)
+        rgb_image = tf.reshape(rgb_image, [-1, self.img_height, self.img_width*2, 3])
+        tf.summary.scalar('loss', loss)
+        tf.summary.image('result_train', result_train, max_outputs=self.batch_size)
+        tf.summary.image('rgb_image', rgb_image, max_outputs=self.batch_size)
+        tf.summary.scalar('learning_rate', self.learning_rate)
+    
+        sum_all = tf.summary.merge_all()
+        
+        vars_trainable = tf.trainable_variables()
+
+        num_param = 0
+
+        for var in vars_trainable:
+            num_param += prod(var.get_shape()).value
+            tf.summary.histogram(var.name, var)
+
+        print('\nTotal nummber of parameters = %d' % num_param)
+
+        train_step = tf.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(loss, var_list=vars_trainable)
+
+        self.loss = loss
+        self.sum_all = sum_all
+        self.train_step = train_step
+        self.pred_train = pred_train
+        self.result_train = result_train
+        
+
+    def SegNet_training(self, sess, path_pack):
+
+        total_count = 0
+        t0 = time.time()
+
+        if os.path.exists('./logs'):
+            import  shutil
+            shutil.rmtree('./logs')
+
+
+        writer = tf.summary.FileWriter("./logs", sess.graph)
+
+        coord = tf.train.Coordinator()
+        threads = tf.train.start_queue_runners(coord=coord)
+
+        for epoch in range(self.num_epoch):
+
+            lr = self.init_learning_rate * self.learning_rate_decay**(epoch//20000)
+
+            for k in range(self.batch_size // self.batch_size):
+                
+                l_train, _ = sess.run([self.loss, self.train_step], feed_dict={self.learning_rate: lr})
+
+                writer.add_summary(sess.run(self.sum_all, feed_dict={self.learning_rate: lr}), total_count)
+                total_count += 1                
+                m, s = divmod(time.time() - t0, 60)
+                h, m = divmod(m, 60)
+                print('Epoch: [%4d/%4d], [%4d/%4d], Time: [%02d:%02d:%02d], loss: %.4f'
+                % (epoch+1, self.num_epoch, k+1, self.batch_size // self.batch_size, h, m, s, l_train))
+
+            if epoch % 100 == 0 and epoch != 0:
+                print('Saving checkpoint ...')
+                self.saver.save(sess, self.weight_path + '/Davis.ckpt')
+
+        coord.request_stop()         
+        coord.join(threads)
+
+    def SegNet_testing_setup(self, fn_img):
+
+        x = self.input_pipeline(fn_img)
+        x = tf.reshape(x, [self.batch_size, self.img_height, self.img_width, 3])
+        logits = self.build_model(x)
+
+        rgb_image = tf.cast(logits, tf.uint8)
+        rgb_image = tf.reshape(rgb_image, [-1, self.img_height, self.img_width, 1])
+        rgb_image = LabelToRGB (rgb_image)
+
+        x = tf.cast(x, tf.uint8)
+        rgb_image = tf.concat([x, rgb_image], axis=2)
+        rgb_image = tf.reshape(rgb_image, [-1, self.img_height, self.img_width*2, 3])
+
+        self.val_result = rgb_image
+        self.x = x
+
+    def SegNet_testing(self, sess, path_pack, fn_img):
+
+        coord = tf.train.Coordinator()
+        threads = tf.train.start_queue_runners(coord=coord)
+        total_count = 1
+        for k in range(len(fn_img)):
+            result= sess.run([self.val_result])
+
+            result = reshape(result, (-1, self.img_height, 2*self.img_width, 3))
+
+            img_name = os.path.basename(fn_img[k])
+            img_name = os.path.splitext(img_name)[0]
+
+            imsave(path_pack.result_dir+'/'+img_name+'.jpg', result[0])
+            print 'Saved result image '+img_name
+            total_count += 1
+
+        coord.request_stop()         
+        coord.join(threads)
+
+    def build_model(self, x, y = None):
 
         with tf.variable_scope('SegNet'):
             
@@ -142,7 +263,12 @@ class SegNetModel():
             upconv5 = conv_relu(up5, 64, ksize=3, stride=1, name='upconv5_1')
             upconv5 = conv_relu(upconv5, 64, ksize=3, stride=1, name='upconv5_2')
             upconv5 = conv_relu(upconv5, self.num_class, ksize=3, stride=1, name='upconv5_3')
-            
+
+            out = tf.argmax(tf.nn.softmax(upconv5, dim=-1), axis=-1)
+
+            if self.training is False:
+                return out
+
             mask = tf.subtract(x, label_map['void'])
             mask = tf.reduce_sum(mask, -1)
             mask = tf.not_equal(mask, 0, name='mask')
@@ -152,156 +278,6 @@ class SegNetModel():
             cross_entropies = tf.nn.softmax_cross_entropy_with_logits(logits=logits_masked,
                                                           labels=labels_masked)
             cross_entropy_sum = tf.reduce_mean(cross_entropies)
-            out = tf.argmax(tf.nn.softmax(upconv5, dim=-1), axis=-1)
-
+            
             return out,cross_entropy_sum
-
-    def SegNet_training_setup(self, fn_seg, fn_img):
-
-        self.batch_size = 4
-
-        y, x, gt = self.input_pipeline(fn_seg, fn_img)
-        gt = tf.cast(gt, tf.uint8)
-        logits, loss = self.build_model(x, y)
-
-        y = tf.to_int64(y, name = 'y')
-        pred_train = 12*tf.cast(logits, tf.uint8)
-        gt = tf.reshape(gt, [-1, self.img_height, self.img_width, 1])
-        pred_train = tf.reshape(pred_train, [-1, self.img_height, self.img_width, 1])
-        result_train = tf.concat([gt, pred_train], axis=2)
-        result_train = tf.cast(tf.reshape(result_train, [-1, self.img_height, self.img_width*2, 1]), tf.uint8)
-
-        rgb_image = tf.cast(logits, tf.uint8)
-        rgb_image = tf.reshape(rgb_image, [-1, self.img_height, self.img_width, 1])
-
-        rgb_image = GrayToRGB (rgb_image)
-        x = tf.cast(x, tf.uint8)
-        rgb_image = tf.concat([x, rgb_image], axis=2)
-        rgb_image = tf.reshape(rgb_image, [-1, self.img_height, self.img_width*2, 3])
-        tf.summary.scalar('loss', loss)
-        tf.summary.image('result_train', result_train, max_outputs=self.batch_size)
-        tf.summary.image('rgb_image', rgb_image, max_outputs=self.batch_size)
-        tf.summary.scalar('learning_rate', self.learning_rate)
-    
-        sum_all = tf.summary.merge_all()
-        
-        vars_trainable = tf.trainable_variables()
-
-        num_param = 0
-
-        for var in vars_trainable:
-            num_param += prod(var.get_shape()).value
-            tf.summary.histogram(var.name, var)
-
-        print('\nTotal nummber of parameters = %d' % num_param)
-
-        train_step = tf.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(loss, var_list=vars_trainable)
-
-        self.loss = loss
-        self.sum_all = sum_all
-        self.train_step = train_step
-        self.pred_train = pred_train
-        self.result_train = result_train
-        
-
-    def SegNet_training(self, sess, path_pack):
-
-        total_count = 0
-        t0 = time.time()
-
-        if os.path.exists('./logs'):
-            import  shutil
-            shutil.rmtree('./logs')
-
-
-        writer = tf.summary.FileWriter("./logs", sess.graph)
-
-        coord = tf.train.Coordinator()
-        threads = tf.train.start_queue_runners(coord=coord)
-
-        for epoch in range(self.num_epoch):
-
-            lr = self.init_learning_rate * self.learning_rate_decay**(epoch//20000)
-
-            for k in range(self.batch_size // self.batch_size):
-                
-                l_train, _ = sess.run([self.loss, self.train_step], feed_dict={self.learning_rate: lr})
-
-                writer.add_summary(sess.run(self.sum_all, feed_dict={self.learning_rate: lr}), total_count)
-                total_count += 1                
-                m, s = divmod(time.time() - t0, 60)
-                h, m = divmod(m, 60)
-                print('Epoch: [%4d/%4d], [%4d/%4d], Time: [%02d:%02d:%02d], loss: %.4f'
-                % (epoch+1, self.num_epoch, k+1, self.batch_size // self.batch_size, h, m, s, l_train))
-
-            if epoch % 1000 == 0 and epoch != 0:
-                print('Saving checkpoint ...')
-                self.saver.save(sess, self.weight_path + '/Davis.ckpt')
-
-        coord.request_stop()         
-        coord.join(threads)
-
-    def SegNet_testing_setup(self, fn_seg, fn_img):
-
-        fn_seg = [fn_seg[0]]*len(fn_img)
-        y, x = self.input_pipeline(fn_seg, fn_img)
-        y = tf.reshape(y, [1, self.img_height, self.img_width])
-        x = tf.reshape(x, [1, self.img_height, self.img_width, 3])
-        logits, loss = self.build_model(x, y)
-        y = tf.to_int64(y, name = 'y')
-        val_result = tf.to_int64(logits, name = 'val_result')
-        val_result = tf.cast(tf.reshape(val_result, [-1, self.img_height, self.img_width, 1]), tf.uint8)
-        input_image = tf.cast(x, tf.uint8)
-
-        self.val_result = val_result
-        self.x = x
-
-    def SegNet_testing(self, sess, path_pack, fn_img):
-
-        coord = tf.train.Coordinator()
-        threads = tf.train.start_queue_runners(coord=coord)
-        total_count = 1
-        for k in range(len(fn_img)):
-            result, image = sess.run([self.val_result, self.x])
-
-            result = reshape(result, (self.img_height, self.img_width))
-            result = around(median_filter(result, 9))
-            result = 255*result
-            print result.shape
-            slice_x, slice_y = bbox_generate(result)
-            height = slice_x.stop-slice_x.start+1
-            width = slice_y.stop-slice_y.start+1
-            if (width == self.img_width or height == self.img_height) or (width <=10 or height <= 10):
-                print('Evaluate picture %d/%d !!!!Not meet requirement' % (k+1, len(fn_img)))
-                pass
-            else:
-                img_name = os.path.basename(fn_img[k])
-                img_name = os.path.splitext(img_name)[0]
-                print('Evaluate picture %d/%d :: BBox size is height:[%d, %d] width:[%d, %d]' % (k+1, len(fn_img), 
-                    slice_x.start, slice_x.stop, slice_y.start, slice_y.stop))
-                
-                result = cv2.cvtColor(result, cv2.COLOR_GRAY2RGB)
-
-                vis = concatenate((image[0], result), axis=0)
-
-                cv2.rectangle(vis,(slice_y.start,slice_x.start),(slice_y.stop,slice_x.stop),(0,255,0),3)
-
-                imsave(path_pack.result_dir+'/'+img_name+'.jpg', vis)
-
-                img_path = path_pack.resize_image_dir+'/'+self.saved_name+time.strftime("%d_%m_%Y")+'_'+str(total_count)+'.jpg'
-
-                imsave(img_path, image[0])
-                total_count += 1
-                bbox = bbox_property(slice_y.start, slice_y.stop, slice_x.start, slice_x.stop, self.label)
-                print('Writing .XML File!')
-                write_xml(img_path, path_pack.xml_path, bbox)
-
-        coord.request_stop()         
-        coord.join(threads)
-        print('Writing train.txt File!')
-        write_txt(path_pack.resize_image_dir, path_pack.txt_path, 'train', self.saved_name)
-        print('Writing test.txt File!')
-        write_txt(path_pack.resize_image_dir, path_pack.txt_path, 'test', self.saved_name)
-        print('Writing Done!')
-
 

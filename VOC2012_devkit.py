@@ -52,7 +52,7 @@ def ImageToLabel (image, height, width):
     seg = tf.reshape(seg, [height, width, len(labels)])
     return seg
 
-def GrayToRGB (image):
+def LabelToRGB (image):
     shape = image.get_shape().as_list()
     shape[-1] = 3
     rgb_image = tf.cast(tf.zeros(shape), dtype=tf.uint8)

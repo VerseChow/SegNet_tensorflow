@@ -13,20 +13,20 @@ def main(config):
     if config.training:
         print('\nLoading data from '+path.data_dir)
 
-        fn_img = ReadTextFile(path.data_dir+'/train.txt', path.data_dir+'/images', 'jpg')          
-        fn_seg = ReadTextFile(path.data_dir+'/train.txt', path.data_dir+'/labels', 'png')
+        fn_img = ReadTextFile(path.data_dir+'/'+config.set+'.txt',
+                path.data_dir+'/images', 'jpg')          
+        fn_seg = ReadTextFile(path.data_dir+'/'+config.set+'.txt',
+                path.data_dir+'/labels', 'png')
 
-        SegNet.SegNet_training_setup(fn_seg, fn_img)
+        SegNet.SegNet_training_setup(fn_img, fn_seg)
         
     else:
         print('\nLoading data from '+path.data_dir)
         
-        fn_img = sorted(ReadTextFile(path.data_dir+'/ImageSets/Segmentation/train.txt',
-                                    path.data_dir+'/JPEGImages', 'jpg'), key=numericalSort)
-        fn_seg = sorted(ReadTextFile(path.data_dir+'/ImageSets/Segmentation/train.txt',
-                                path.data_dir+'/SegmentationClass', 'png'), key=numericalSort)
+        fn_img = ReadTextFile(path.data_dir+'/'+config.set+'.txt',
+                path.data_dir+'/images', 'jpg')
 
-        SegNet.SegNet_testing_setup(fn_seg, fn_img)
+        SegNet.SegNet_testing_setup(fn_img)
 
     print('Finished loading in %.2f seconds.' % (time.time() - t0))
 
@@ -61,18 +61,14 @@ def parse_args():
                         default='0', type=str)
     parser.add_argument('--threshold', dest='threshold', help='threshold to display',
                         default=0.9, type=float)
-    parser.add_argument('--saved_name', dest='saved_name', help='image saved name for data collection',
-                        default='table_9_', type=str)
-    parser.add_argument('--label', dest='label', help='object label for data collection',
-                        default='table', type=str)
-    parser.add_argument('--dataset', dest='dataset', help='dataset name to save',
-                        default='progress', type=str)
     parser.add_argument('--train_test_dataset', dest='train_test_dataset', help='train and test dataset directory',
                         default='./data/train', type=str)
-    parser.add_argument('--oneshot_img', dest='oneshot_img',  nargs='+', help='oneshot image training name',
-                        default=['001'], type=str)
     parser.add_argument('--resolution', dest='resolution', nargs='+', help='image resolution, [width height]',
                         default = [224, 224], type=int)
+    parser.add_argument('--num_class', dest='num_class', help='Segmentation class number',
+                        default = 21, type=int)
+    parser.add_argument('--set', dest='set', help='train or test set, ie, train, val or trainval',
+                        default = 'train', type=str)
     config = parser.parse_args()
 
     return config
