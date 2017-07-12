@@ -1,6 +1,10 @@
+import os
+import sys
 import numpy as np
 import tensorflow as tf
+import argparse
 
+from scipy.misc import imread, imsave
 
 color_map = np.array([[  0,   0,   0], [128,   0,   0], [  0, 128,   0],
                 [128, 128,   0], [  0,   0, 128], [128,   0, 128],
@@ -40,15 +44,9 @@ labels = ['background', 'aeroplane', 'bicycle', 'bird', 'boat', 'bottle',
 
 def ImageToLabel (image, height, width):
     image = tf.cast(image, dtype=tf.float32)
-    #seg = tf.subtract(image, label_map['background'])
-    #seg = tf.reduce_sum(seg, 2, keep_dims=True)
     seg = tf.equal(image, 0.0)
-    #seg = tf.reshape(seg, [height, width, 1])
     for label in range(len(labels[1:])):
-        #seg_label = tf.subtract(image, label_map[label])
-        #seg_label = tf.reduce_sum(seg_label, 2, keep_dims=True)
         seg_label = tf.equal(image, label+1)
-        #seg_label = tf.reshape(seg_label, [height, width, 1])
         seg = tf.concat([seg, seg_label], -1)
     seg = tf.cast(seg, dtype=tf.float32)
     seg = tf.reshape(seg, [height, width, len(labels)])
@@ -64,9 +62,43 @@ def GrayToRGB (image):
         temp = np.full(shape, 0)
         temp[:,:,:] = color_map[label,:]
         temp = tf.cast(temp, dtype=tf.uint8)
-        #temp = tf.Variable(temp)
         label_bool = tf.equal(image, label)
         rgb_image = tf.assign(rgb_image,tf.where (label_bool, temp, rgb_image))
     return rgb_image
 
+def PrepareData (voc_dir, set_):
+    num_classes = color_map.shape[0] - 1
+    if not os.path.isdir('./data/' + set_ + '/labels'):
+        os.makedirs('./data/' + set_ + '/labels')
+    if not os.path.isdir('./data/' + set_ + '/images'):
+        os.makedirs('./data/' + set_ + '/images')
+    with open(voc_dir + '/ImageSets/Segmentation/' + set_ + '.txt') as f:
+        content = f.readlines()
+        for line in content:
+            fn = line[:-1]
+            print('%s/%s' % (set_, fn))
+            img = imread(voc_dir + '/JPEGImages/' + fn + '.jpg', mode='RGB')
+
+            imsave('./data/' + set_ + '/images/' + fn + '.jpg', img)
+
+            lbl = imread(voc_dir + '/SegmentationClass/' + fn + '.png', mode='RGB')
+            tmp = np.zeros((lbl.shape[0], lbl.shape[1]), dtype=np.uint8) + 255
+
+            for k in range(num_classes):
+                clr = np.int32(color_map[k, :])
+                e = lbl - clr[np.newaxis, np.newaxis, :]
+                tmp[np.sum(e**2, axis=2) == 0] = k
+
+            imsave('./data/' + set_ + '/labels/' + fn + '.png', tmp)
+            
+# Convert the VOC2012 dataset into the format we want
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='VOC2012_PrepareData')
+
+    parser.add_argument('--voc_dir', dest='voc_dir', help='specify path to VOC2012',
+                        default='./VOCdevkit/VOC2012', type=str)
+    parser.add_argument('--set_', dest='set_', help='data set to prepare, like train, val or trainval',
+                        default='train', type=str)
+    config = parser.parse_args()
+    PrepareData(config.voc_dir, config.set_)
 

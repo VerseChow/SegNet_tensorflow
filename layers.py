@@ -1,8 +1,10 @@
 import tensorflow as tf
 
+from numpy import *
+
 vgg_weights = load('vgg16.npy', encoding='latin1').item()
 
-def conv_relu_vgg(x, name='conv_vgg', training=True):
+def conv_relu_vgg(x, name='conv_vgg', reuse=None, training=True):
     kernel = vgg_weights[name][0]
     bias = vgg_weights[name][1]
     with tf.variable_scope(name):
@@ -14,7 +16,7 @@ def conv_relu_vgg(x, name='conv_vgg', training=True):
         x = tf.layers.batch_normalization(x, name='batchnorm')
         return tf.nn.relu(x, name='relu')
 
-def conv_relu(x, num_filters, ksize=3, stride=2, name='upconv', reuse=True, training=True):
+def conv_relu(x, num_filters, ksize=3, stride=2, name='upconv', reuse=None, training=True):
     with tf.variable_scope(name):
         x = tf.layers.conv2d(x, num_filters, ksize, stride,
                 padding='same', use_bias=False, reuse=reuse,
@@ -22,7 +24,7 @@ def conv_relu(x, num_filters, ksize=3, stride=2, name='upconv', reuse=True, trai
         x = tf.layers.batch_normalization(x, name='batchnorm')
         return tf.nn.relu(x, name='relu')
 
-def upconv_relu(x, num_filters, ksize=3, stride=2, name='upconv', reuse=True, training=True):
+def upconv_relu(x, num_filters, ksize=3, stride=2, name='upconv', reuse=None, training=True):
     with tf.variable_scope(name):
         x = tf.layers.conv2d_transpose(x, num_filters, ksize, stride,
                 padding='same', use_bias=False, reuse=reuse,
