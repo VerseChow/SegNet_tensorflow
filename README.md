@@ -1,4 +1,4 @@
-# Image Segmentation based on SegNet
+# Image Segmentation based on SegNet [![Awesome]
 
 This repo is to reimplement image segmentation via tensorflow. The training dataset is based on [VOC2012](http://host.robots.ox.ac.uk/pascal/VOC/voc2012/)
 
