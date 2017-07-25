@@ -20,8 +20,6 @@ Please check main.py in scripts/ folder to see the option you could choose to en
 # Demo Picture
 Following pictures are the results of SegNet. Left hand side is image, right hand side is label.
 
-![segnet1](https://user-images.githubusercontent.com/22964197/28596051-c00c94da-7164-11e7-9435-bac7c1c37a42.png)
-
 ![segnet2](https://user-images.githubusercontent.com/22964197/28596095-fae3f6a2-7164-11e7-8675-b84731e3e38c.png)
 
 ![segnet3](https://user-images.githubusercontent.com/22964197/28596147-3328044a-7165-11e7-9857-723890cff8a9.png)
