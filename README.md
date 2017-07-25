@@ -17,3 +17,4 @@ The idea of this reimplementation is based on [SegNet](https://arxiv.org/pdf/151
 # Advanced Usage
 Please check main.py in scripts/ folder to see the option you could choose to enhance the training results.
 
+![segnet1](https://user-images.githubusercontent.com/22964197/28596051-c00c94da-7164-11e7-9435-bac7c1c37a42.png)
